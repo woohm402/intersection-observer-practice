@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { List, ListItem } from "./App.style";
 
@@ -11,10 +11,13 @@ interface Todo {
 
 function App() {
   const [page, setPage] = useState(0);
+  const [fetching, setFetching] = useState(false);
   const [todos, setTodos] = useState<Todo[]>([]);
+  const listRef = useRef<HTMLLIElement>(null);
 
   const fetchTodo = async (p: number) => {
     try {
+      setFetching(true);
       const promises = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(async (num) => {
         const response = await axios.get<Todo>(
           `https://jsonplaceholder.typicode.com/todos/${p * 10 + num}`
@@ -23,12 +26,32 @@ function App() {
       });
       const newTodos = await Promise.all(promises);
       setTodos([...todos, ...newTodos]);
-    } catch (err) {}
+    } catch (err) {
+    } finally {
+      setFetching(false);
+    }
+    return null;
   };
 
   useEffect(() => {
-    fetchTodo(page);
-  }, [page]);
+    fetchTodo(0);
+  }, []);
+
+  useEffect(() => {
+    if (listRef.current) {
+      ((target) => {
+        const observer = new IntersectionObserver(async ([entry]) => {
+          if (entry.isIntersecting && !fetching) {
+            await fetchTodo(page + 1);
+            setPage((p) => p + 1);
+          }
+        });
+
+        observer.observe(target);
+        return () => observer.unobserve(target);
+      })(listRef.current);
+    }
+  }, [listRef.current]);
 
   return (
     <div className="App">
@@ -40,6 +63,7 @@ function App() {
             <p>{item.completed ? "done" : "not yet"}</p>
           </ListItem>
         ))}
+        {!fetching && todos.length && <li ref={listRef}>Loading...</li>}
       </List>
       <button onClick={() => setPage((p) => p + 1)}>[debug] next page</button>
     </div>
